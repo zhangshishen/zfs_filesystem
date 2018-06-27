@@ -73,13 +73,57 @@ int get_depth(sector_t iblock, int* offset){
 	return res;
 }
 
-static int zfs_get_blocks(struct inode* inode,sector_t iblock, unsigned long maxblocks, u32 *bno,bool *new, bool *boundary, int create){
+static int zfs_get_block_number(struct inode* inode,int* offset,int depth){
+	struct zfs_inode_info* zi = ZFS_I(inode);
+	if(zi->i_data[offset[0]] == 0){
+		goto no_block;
+	}
+	if(depth==1){	//only level 1 page
+		return zi->i_data[offset[0]];
+	}
+	struct buffer_head* bh = sb_bread(inode->i_sb,zi->i_data[offset[0]]);
+	
+	if(!bh){
+		goto read_error;
+	}
 
-	int depth[4];
-	get_depth(iblock,depth);
+	unsigned int *entry = bh->b_data;
+	if(entry[offset[1]]==0)){
+		brelse(bh);
+		goto no_block;
+	}
+	return entry[offset[1]];
+
+	
+
+read_error
+	printk("cant read buffer while getting block\n");
+	return NULL;
+no_block:
+	offset[0] = -1;
+	return NULL;
+}
+
+static int zfs_get_block(struct inode* inode,sector_t iblock, struct buffer_head* bh_result, int create){
+
+	int offset[4];
+	int depth = get_depth(iblock,depth);
 	if(depth == 0)
 		return -EIO;
+	int num;
+	num = zfs_get_block_buf(inode,offset,depth);
+
+	if(!bh){
+		if(offset[0]==-1){
+			//no block ,alloc block
+		}else{
+			//read block error
+			return -EIO
+		}
+	}
 	
+	map_bh(bh_result,inode0>i_sb,num);
+
 	
 }
 

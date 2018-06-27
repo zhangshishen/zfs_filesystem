@@ -36,3 +36,7 @@ struct zfs_sb_info {
 	struct buffer_head *s_bh;
 	struct zfs_super_block* s_zs;
 }
+
+static inline struct zfs_inode_info * ZFS_I(struct inode* inode){
+	return container_of(inode,struct zfs_inode_info,vfs_inode);
+}
