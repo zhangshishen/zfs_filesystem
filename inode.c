@@ -14,7 +14,15 @@
 
 #include "zfs.h"
 
-//return a vfs inode
+
+#define SIZEPERINODEENRTY 4	//32 bit max inode number
+#define LEVEL0ENRTY 4		//inode block number first level
+#define LEVEL1ENTRY 6
+//#define LEVEL2ENTRY 2
+
+#define LEVEL0SIZE 4096
+#define LEVEL1SIZE ((4096/SIZEPERINODEENRTY)*4096)
+//#define LEVEL2SIZE ((4096/SIZEPERINODEENRTY)*(4096/SIZEPERINODEENRTY)*4096)
 
 
 static int __zfs_write_inode(struct inode *inode, int do_sync)
@@ -47,9 +55,32 @@ int zfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	return __zfs_write_inode(inode, wbc->sync_mode == WB_SYNC_ALL);
 }
 
-static int zfs_get_blocks(struct inode* inode,sector_t iblock, unsigned long maxblocks, u32 *bno,bool *new, bool *boundary, int create){
-	
+int get_depth(sector_t iblock, int* offset){
+ 	int res = 1;
+	if(iblock> 4096*1024){
+		return 0;	
+	}
+	if(iblock + 1> LEVEL0ENRTY){
+		res++;
+	}else{
+		index[0] = iblock;
+		return res;
+	}
+	iblock -= LEVEL0ENRTY;
+	index[0] = iblock / 1024 + LEVEL0ENRTY;
+	if(index[0]>10) return 0; 
+	index[1] = iblock % 1024;
+	return res;
+}
 
+static int zfs_get_blocks(struct inode* inode,sector_t iblock, unsigned long maxblocks, u32 *bno,bool *new, bool *boundary, int create){
+
+	int depth[4];
+	get_depth(iblock,depth);
+	if(depth == 0)
+		return -EIO;
+	
+	
 }
 
 const struct address_space_operations zfs_aops = {
