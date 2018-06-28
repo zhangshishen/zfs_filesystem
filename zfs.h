@@ -17,6 +17,15 @@ struct zfs_inode_info{
 	int i_data[10];
 	struct inode vfs_inode;
 }
+
+
+/*
+block overall:
+
+| 1 empty block | 1 super block | n block of inode bitmap | n block of block bitmap| n block of inode table | 1 root block | other block of data block|
+
+two block of inode descriptor
+*/
 struct zfs_super_block {
 	int s_inode_count;
 	int s_free_blocks_count;
@@ -24,12 +33,22 @@ struct zfs_super_block {
 	int s_first_data_block;
 	int s_inode_table_block_number;
 	int s_inode_bitmap_block_number;
+	int s_block_bitmap_number;
+	int s_total_block_number;
 	
 }
 
 
 
 struct zfs_sb_info {
+	int s_inode_count;
+	int s_free_blocks_count;
+	int s_free_inode_count;
+	int s_first_data_block;
+	int s_inode_table_block_number;
+	int s_inode_bitmap_block_number;
+	int s_block_bitmap_number;
+	int s_total_block_number;
 	int s_max_inode_num;
 	int s_max_block_num;
 	int s_inode_table_block_num;

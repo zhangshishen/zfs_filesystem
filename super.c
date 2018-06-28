@@ -16,7 +16,7 @@
 #include <linux/uaccess.h>
 #include <linux/dax.h>
 
-
+#include "zfs.h"
 
 
 static struct kmem_cache* zfs_inode_cachep;

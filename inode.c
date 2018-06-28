@@ -44,7 +44,7 @@ static int __zfs_write_inode(struct inode *inode, int do_sync)
 	for(n = 0;n < N_BLOCK;n ++){
 		raw_inode->i_block[n] = zi->i_data[n];	
 	}
-	make_buffer_dirty(bh);
+	mark_buffer_dirty(bh);
 	sync_dirty_buffer(bh);
 	brelse(bh);
 
@@ -92,11 +92,14 @@ static int zfs_get_block_number(struct inode* inode,int* offset,int depth){
 		brelse(bh);
 		goto no_block;
 	}
-	return entry[offset[1]];
+
+	int res = entry[offset[1]];
+	brelse(bh);
+	return res;
 
 	
 
-read_error
+read_error:
 	printk("cant read buffer while getting block\n");
 	return NULL;
 no_block:
@@ -104,27 +107,87 @@ no_block:
 	return NULL;
 }
 
+static void zfs_clean_buffer(int* c){
+	int i = 0;
+	for(;i<1024;i++) c[i] = 0;
+}
+// alloc blocks from super block and clean it to zero, link to inode
+static int zfs_alloc_block(struct inode* inode sector_t iblock){
+	int offset[4];
+	struct buffer_head* bh;
+	struct super_block* sb = inode->i_sb;
+	struct zfs_inode_info* zi = ZFS_I(inode);
+
+	int depth = get_depth(iblock,offset);
+	int ret = -EIO;
+	if(depth == 0)
+		goto no_empty_block;
+
+	
+	if(zi->i_data[offset[0]]==0){
+		int block_num = zfs_new_blocks(inode,1);
+
+		if(block_num == 0){
+			goto no_empty_block;
+		}
+		ret = block_num;
+		zi->i_data[offset[0]] = block_num;
+		bh = sb_bread(sb,block_num);
+
+		if(!bh){
+			goto no_empty_block;
+		}
+		
+		zfs_clean_buffer(bh->b_data);
+
+		if(depth>1){
+			block_num = zfs_new_blocks(inode,1);
+			ret = block_num;
+			((int*)bh->b_data)[offset[1]] = block_num;
+			mark_buffer_dirty(bh);
+			sync_dirty_buffer(bh);
+			brelse(bh);
+			bh = sb_bread(sb,block_num);
+			zfs_clean_buffer(bh->b_data);
+		}
+		
+
+	}else{
+		printk("fatal error, i_data not zero during alloc_block\n");
+	}
+	return ret;
+
+no_empty_block:
+	return -EIO;
+
+}
 static int zfs_get_block(struct inode* inode,sector_t iblock, struct buffer_head* bh_result, int create){
 
 	int offset[4];
-	int depth = get_depth(iblock,depth);
+	int depth = get_depth(iblock,offset);
 	if(depth == 0)
 		return -EIO;
-	int num;
-	num = zfs_get_block_buf(inode,offset,depth);
+	int b_num;
+	b_num = zfs_get_block_number(inode,offset,depth);
 
 	if(!bh){
 		if(offset[0]==-1){
 			//no block ,alloc block
+			b_num = zfs_alloc_block(inode,iblock);
+			if(b_num <= 0){
+				goto failed;
+			}
+
 		}else{
 			//read block error
-			return -EIO
+			return -EIO;
 		}
 	}
 	
-	map_bh(bh_result,inode0>i_sb,num);
-
-	
+	map_bh(bh_result,inode->i_sb,b_num);
+	return 0;
+failed:
+	return -EIO;
 }
 
 const struct address_space_operations zfs_aops = {
@@ -218,3 +281,65 @@ static struct zfs_inode* zfs_get_inode(struct super_block* sb,int ino,struct buf
 	return (struct zfs_inode *)(bh->data + inode_offset);
 
 } 
+
+
+static int zfs_writepage(struct page *page, struct writeback_control *wbc)
+{
+	return block_write_full_page(page, zfs_get_block, wbc);
+}
+
+static int zfs_readpage(struct file *file, struct page *page)
+{
+	return mpage_readpage(page, zfs_get_block);
+}
+
+static int
+zfs_readpages(struct file *file, struct address_space *mapping,
+		struct list_head *pages, unsigned nr_pages)
+{
+	return zfs_readpages(mapping, pages, nr_pages, zfs_get_block);
+}
+static int
+zfs_writepages(struct address_space *mapping, struct writeback_control *wbc)
+{
+	return mpage_writepages(mapping, wbc, zfs_get_block);
+}
+
+
+static int
+zfs_write_begin(struct file *file, struct address_space *mapping,
+		loff_t pos, unsigned len, unsigned flags,
+		struct page **pagep, void **fsdata)
+{
+	int ret;
+
+	ret = block_write_begin(mapping, pos, len, flags, pagep,
+				zfs_get_block);
+	if (ret < 0)
+		zfs_write_failed(mapping, pos + len);
+	return ret;
+}
+static void zfs_write_failed(struct address_space *mapping, loff_t to){
+
+}
+static int zfs_write_end(struct file *file, struct address_space *mapping,
+			loff_t pos, unsigned len, unsigned copied,
+			struct page *page, void *fsdata)
+{
+	int ret;
+
+	ret = generic_write_end(file, mapping, pos, len, copied, page, fsdata);
+	if (ret < len)
+		zfs_write_failed(mapping, pos + len);
+	return ret;
+	
+}
+
+const struct address_space_operations zfs_aops = {
+	.readpage		= zfs_readpage,
+	.readpages		= zfs_readpages,
+	.writepage		= zfs_writepage,
+	.write_begin		= zfs_write_begin,
+	.write_end		= zfs_write_end,
+	.writepages		= zfs_writepages,
+};
