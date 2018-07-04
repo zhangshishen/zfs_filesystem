@@ -125,6 +125,7 @@ static int zfs_alloc_block(struct inode* inode sector_t iblock){
 
 	
 	if(zi->i_data[offset[0]]==0){
+		
 		int block_num = zfs_new_blocks(inode,1);
 
 		if(block_num == 0){

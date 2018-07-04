@@ -10,13 +10,13 @@ struct zfs_inode{
 	unsigned int i_flags;
 	unsigned int i_nlink
 	int i_block[10];
-}
+};
 
 
 struct zfs_inode_info{
 	int i_data[10];
 	struct inode vfs_inode;
-}
+};
 
 
 /*
@@ -36,7 +36,7 @@ struct zfs_super_block {
 	int s_block_bitmap_number;
 	int s_total_block_number;
 	
-}
+};
 
 
 
@@ -54,8 +54,16 @@ struct zfs_sb_info {
 	int s_inode_table_block_num;
 	struct buffer_head *s_bh;
 	struct zfs_super_block* s_zs;
-}
+};
+#define ZFS_MAX_NAME_LEN 28
+struct zfs_dir_entry{
+	int inode;
+	int name_len;
+	int rec_len;
+	int file_type;
+	char name[ZFS_MAX_NAME_LEN];
+};
 
 static inline struct zfs_inode_info * ZFS_I(struct inode* inode){
 	return container_of(inode,struct zfs_inode_info,vfs_inode);
-}
+};
